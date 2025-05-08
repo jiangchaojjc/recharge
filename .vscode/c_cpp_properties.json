@@ -1,0 +1,55 @@
+{
+  "configurations": [
+    {
+      "browse": {
+        "databaseFilename": "${default}",
+        "limitSymbolsToIncludedHeaders": false
+      },
+      "includePath": [
+        "/home/lqc/catkin_ws/devel/include/**",
+        "/home/lqc/camera_rectangle/devel/include/**",
+        "/opt/ros/melodic/include/**",
+        "/home/lqc/catkin_ws/src/thirdparty/navigation/amcl/include/**",
+        "/home/lqc/catkin_ws/src/thirdparty/navigation/base_local_planner/include/**",
+        "/home/lqc/catkin_ws/src/thirdparty/navigation/carrot_planner/include/**",
+        "/home/lqc/catkin_ws/src/charging_station/include/**",
+        "/home/lqc/catkin_ws/src/thirdparty/navigation/clear_costmap_recovery/include/**",
+        "/home/lqc/catkin_ws/src/thirdparty/navigation/costmap_2d/include/**",
+        "/home/lqc/catkin_ws/src/thirdparty/costmap_converter/include/**",
+        "/home/lqc/camera_rectangle/src/demo01_Rectangular/include/**",
+        "/home/lqc/catkin_ws/src/thirdparty/navigation/dwa_local_planner/include/**",
+        "/home/lqc/catkin_ws/src/thirdparty/navigation/global_planner/include/**",
+        "/home/lqc/catkin_ws/src/thirdparty/navigation/map_server/include/**",
+        "/home/lqc/catkin_ws/src/thirdparty/move_base_flex/mbf_abstract_core/include/**",
+        "/home/lqc/catkin_ws/src/thirdparty/move_base_flex/mbf_abstract_nav/include/**",
+        "/home/lqc/catkin_ws/src/thirdparty/move_base_flex/mbf_costmap_core/include/**",
+        "/home/lqc/catkin_ws/src/thirdparty/move_base_flex/mbf_costmap_nav/include/**",
+        "/home/lqc/catkin_ws/src/thirdparty/move_base_flex/mbf_simple_nav/include/**",
+        "/home/lqc/catkin_ws/src/thirdparty/move_base_flex/mbf_utility/include/**",
+        "/home/lqc/catkin_ws/src/mbot_bringup/include/**",
+        "/home/lqc/catkin_ws/src/thirdparty/navigation/move_base/include/**",
+        "/home/lqc/catkin_ws/src/thirdparty/navigation/move_slow_and_clear/include/**",
+        "/home/lqc/catkin_ws/src/my_transform_publisher/include/**",
+        "/home/lqc/catkin_ws/src/thirdparty/navigation/nav_core/include/**",
+        "/home/lqc/catkin_ws/src/thirdparty/navigation/navfn/include/**",
+        "/home/lqc/catkin_ws/src/thirdparty/openslam_gmapping/include/**",
+        "/home/lqc/camera_rectangle/src/point_cloud_processing/include/**",
+        "/home/lqc/catkin_ws/src/pointcloud_processing/include/**",
+        "/home/lqc/catkin_ws/src/navigation_layers/range_sensor_layer/include/**",
+        "/home/lqc/catkin_ws/src/thirdparty/navigation/rotate_recovery/include/**",
+        "/home/lqc/catkin_ws/src/sensor_integration/include/**",
+        "/home/lqc/catkin_ws/src/navigation_layers/social_navigation_layers/include/**",
+        "/home/lqc/catkin_ws/src/thirdparty/teb_local_planner/include/**",
+        "/home/lqc/catkin_ws/src/thirdparty/navigation/voxel_grid/include/**",
+        "/home/lqc/camera_rectangle/src/xv_sdk/include/**",
+        "/usr/include/**"
+      ],
+      "name": "ROS",
+      "intelliSenseMode": "gcc-x64",
+      "compilerPath": "/usr/bin/gcc",
+      "cStandard": "gnu11",
+      "cppStandard": "c++14"
+    }
+  ],
+  "version": 4
+}
