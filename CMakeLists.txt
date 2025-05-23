@@ -22,6 +22,7 @@ find_package(catkin REQUIRED COMPONENTS
   cv_bridge
   image_transport
   message_generation
+  robot_sensors
 )
 
 add_service_files(

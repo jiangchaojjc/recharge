@@ -31,4 +31,7 @@
   <run_depend>cv_bridge</run_depend>
   <run_depend>image_transport</run_depend>
   <run_depend>opencv2</run_depend>
+  <build_depend>robot_sensors</build_depend>
+  <run_depend>robot_sensors</run_depend>
+
 </package>
