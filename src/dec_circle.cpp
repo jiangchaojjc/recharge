@@ -415,7 +415,7 @@ namespace charging_station
     bool ImageRectDetector::QRcodeDectectPnp(QRcodePoseTemp &qr_pose)
     {
         // 2. 检测二维码（假设已经检测到 4 个角点）
-        cv::Mat image = cv::imread("/data/ld_ros/src/63.png");
+        cv::Mat image = cv::imread("/data/ld_ros/Qrcode.png");
         if (image.empty())
         {
             ROS_INFO("can not read image !!! ");
@@ -453,7 +453,7 @@ namespace charging_station
             }
 
             // 3. 定义二维码的 3D 世界坐标（假设二维码边长 10cm，位于 Z=0 平面）
-            const float qrCodeSize = 0.07f; // 假设二维码边长为10cm
+            const float qrCodeSize = 0.045f; // 假设二维码边长为10cm
             std::vector<cv::Point3f> qrCodeCorners3D = {
                 cv::Point3f(0, 0, 0),                   // 左上
                 cv::Point3f(qrCodeSize, 0, 0),          // 右上
@@ -491,7 +491,7 @@ namespace charging_station
             }
 
             // 3. 定义二维码的 3D 世界坐标（假设二维码边长 10cm，位于 Z=0 平面）
-            const float qrCodeSize = 0.07f; // 假设二维码边长为10cm
+            const float qrCodeSize = 0.045f; // 假设二维码边长为10cm
             std::vector<cv::Point3f> qrCodeCorners3D = {
                 cv::Point3f(0, 0, 0),                   // 左上
                 cv::Point3f(qrCodeSize, 0, 0),          // 右上
@@ -517,15 +517,6 @@ namespace charging_station
             return false;
         }
 
-        // 5. 可选：将旋转向量转换为旋转矩阵
-
-        // std::cout << "Rotation Vector (rvec):\n"
-        //           << rvec << std::endl;
-        // std::cout << "Translation Vector (tvec):\n"
-        //           << tvec << std::endl;
-        // std::cout << "Rotation Matrix (R):\n"
-        //           << R << std::endl;
-
         // 使用示例：
         cv::Mat R;
         cv::Rodrigues(rvec, R);
@@ -533,6 +524,7 @@ namespace charging_station
         pitch = asin(-R.at<double>(2, 0));
         roll = atan2(R.at<double>(2, 1), R.at<double>(2, 2));
         yaw = atan2(R.at<double>(1, 0), R.at<double>(0, 0));
+        std::cout << "二维码相对于机器人的角度: " << std::endl;
         std::cout << "Yaw (Z): " << yaw * 180 / CV_PI << "°" << std::endl;
         std::cout << "Pitch (Y): " << pitch * 180 / CV_PI << "°" << std::endl;
         std::cout << "Roll (X): " << roll * 180 / CV_PI << "°" << std::endl;
@@ -543,13 +535,6 @@ namespace charging_station
         double tz = tvec.at<double>(2);
         std::cout << "二维码相对于机器人的位置 (x, y, z): " << tx << "  " << ty << "  " << tz << std::endl;
 
-        // 9. 计算机器人相对于二维码的位姿
-        // cv::Mat R_robot_to_tag = R.t();                  // 旋转矩阵的逆 = 转置
-        // cv::Mat t_robot_to_tag = -R_robot_to_tag * tvec; // 平移向量
-
-        // 10. 打印结果
-        std::cout << "二维码相对于机器人的位置 (x, y, z): " << tvec << std::endl;
-
         qr_pose.x = tx;
         qr_pose.y = ty;
         qr_pose.z = tz;
@@ -557,6 +542,17 @@ namespace charging_station
         qr_pose.pitch = pitch;
         qr_pose.yaw = yaw;
 
+        // 9. 计算机器人相对于二维码的位姿
+        cv::Mat R_robot_to_tag = R.t();                  // 旋转矩阵的逆 = 转置
+        cv::Mat t_robot_to_tag = -R_robot_to_tag * tvec; // 平移向量
+        // 10. 打印结果
+        std::cout << "机器人相对于二维码的位置 (x, y, z): " << t_robot_to_tag.t() << std::endl;
+
+        // 可选：转换为欧拉角
+        cv::Mat K;
+        cv::Mat Q;
+        cv::Vec3d euler_angles = cv::RQDecomp3x3(R_robot_to_tag, K, Q);
+        std::cout << "机器人相对于二维码的欧拉角 (roll, pitch, yaw): " << euler_angles << std::endl;
         return true;
     }
 

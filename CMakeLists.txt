@@ -68,11 +68,13 @@ target_link_libraries(charging_station_service_server
 )
 
 add_executable(charging_station_service_client src/charging_station_service_client.cpp)
-add_dependencies(charging_station_service_client 
+add_dependencies(charging_station_service_client  
   ${${PROJECT_NAME}_EXPORTED_TARGETS} 
   ${catkin_EXPORTED_TARGETS}
 )
-target_link_libraries(charging_station_service_client ${catkin_LIBRARIES})
+target_link_libraries(charging_station_service_client 
+  dec_circle 
+  ${catkin_LIBRARIES})
 
 # add_executable(charging_station_publisher src/charging_station_publisher.cpp)
 # target_link_libraries(charging_station_publisher ${catkin_LIBRARIES})

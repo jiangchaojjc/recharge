@@ -11,6 +11,15 @@
 #include <tf2/LinearMath/Matrix3x3.h>
 #include <robot_sensors/Charge.h>
 
+enum actionClass
+{
+    ROTATE,
+    FORWARD,
+    ALIGNROTATE,
+    ALIGNBACK,
+    STOP
+};
+
 geometry_msgs::Pose current_pose;
 geometry_msgs::Pose2D jieware_pose;
 robot_sensors::Charge charge_info;
@@ -61,6 +70,15 @@ double restrictAngleVel(double angle)
     return angle;
 }
 
+void SetRobotSpeed(actionClass action, double line_speed, double angle_speed)
+{
+    ROS_INFO("action class %d speed line_speed=%.2f angle_speed=%.2f ", static_cast<int>(action), line_speed, angle_speed);
+    geometry_msgs::Twist vel_msg;
+    vel_msg.linear.x = line_speed;
+    vel_msg.angular.z = angle_speed;
+    cmd_vel_pub.publish(vel_msg);
+}
+
 // 计算两点之间的距离
 double getDistance(geometry_msgs::Pose a, geometry_msgs::Pose b, bool print = true)
 {
@@ -79,10 +97,11 @@ geometry_msgs::Pose2D getChargePoseInWorld(const QRcodePoseTemp &qrcodePose)
     geometry_msgs::Pose2D charge_pose_in_world;
     geometry_msgs::Pose2D charge_pose_in_robot;
 
-    charge_pose_in_robot.x = qrcodePose.z + 0.25 + 0.08;
+    charge_pose_in_robot.x = qrcodePose.z + 0.25 + 0.10;
     charge_pose_in_robot.y = -qrcodePose.x;
-    ROS_INFO("charge_pose_local : %.2f  %.2f", charge_pose_in_robot.x, charge_pose_in_robot.y);
-    charge_pose_in_robot.theta = normalizeAngle(jieware_pose.theta - (qrcodePose.pitch / 180.00 * M_PI) + M_PI);
+    float gap_theta = atan2(charge_pose_in_robot.y, charge_pose_in_robot.x);
+    ROS_INFO("charge_pose_local : %.2f  %.2f  gap_theta =%.2f", charge_pose_in_robot.x, charge_pose_in_robot.y, gap_theta * 180 / M_PI);
+    charge_pose_in_robot.theta = normalizeAngle(jieware_pose.theta + gap_theta + M_PI);
     charge_pose_in_world = RCoor2WCoor(charge_pose_in_robot, jieware_pose);
     charge_pose_in_world.theta = charge_pose_in_robot.theta;
     ROS_INFO("charge_pose_in_world : %.2f  %.2f  %.2f ", charge_pose_in_world.x, charge_pose_in_world.y, charge_pose_in_world.theta);
@@ -137,10 +156,10 @@ double getDistance(geometry_msgs::Pose2D a, geometry_msgs::Pose2D b, bool print 
     double dx = b.x - a.x;
     double dy = b.y - a.y;
     double distance = sqrt(dx * dx + dy * dy);
-    if (print)
-    {
-        ROS_INFO("compute distance: %.2f", distance);
-    }
+    // if (print)
+    // {
+    //     ROS_INFO("compute distance: %.2f", distance);
+    // }
     return distance;
 }
 
@@ -148,7 +167,7 @@ double getDistance(geometry_msgs::Pose2D a, geometry_msgs::Pose2D b, bool print 
 geometry_msgs::Pose2D calculateTargetPose(geometry_msgs::Pose2D pose_charge)
 {
     geometry_msgs::Pose2D target_in_charge_coordination;
-    target_in_charge_coordination.x = 0.5;
+    target_in_charge_coordination.x = 0.7;
     target_in_charge_coordination.y = 0.0;
     target_in_charge_coordination.theta = 0.0;
     geometry_msgs::Pose2D target_in_world = RCoor2WCoor(target_in_charge_coordination, pose_charge);
@@ -199,11 +218,10 @@ void turnToTarget(geometry_msgs::Pose2D target_pose)
 {
     ROS_INFO("rotate to target point");
 
-    double target_yaw = atan2(jieware_pose.y - target_pose.y, jieware_pose.x - target_pose.x);
+    double target_yaw = atan2(target_pose.y - jieware_pose.y, target_pose.x - jieware_pose.x);
     double angle_diff = normalizeAngle(target_yaw - jieware_pose.theta);
 
-    ros::Rate rate(10); // 设置循环频率为每秒10次
-    geometry_msgs::Twist vel_msg;
+    ros::Rate rate(20); // 设置循环频率为每秒10次
     int print_counter = 0;
     double angle_vel = 0.0;
 
@@ -212,8 +230,8 @@ void turnToTarget(geometry_msgs::Pose2D target_pose)
         angle_diff = normalizeAngle(target_yaw - jieware_pose.theta);
 
         angle_vel = restrictAngleVel(angle_diff * 2.0);
-        vel_msg.angular.z = angle_vel;
-        cmd_vel_pub.publish(vel_msg);
+
+        SetRobotSpeed(ROTATE, 0, angle_vel);
 
         ROS_INFO("rotate robot pose: x=%.2f, y=%.2f, yaw=%.2f", jieware_pose.x, jieware_pose.y, jieware_pose.theta);
         ROS_INFO("rotate target pose: x=%.2f, y=%.2f ", target_pose.x, target_pose.y);
@@ -228,8 +246,8 @@ void turnToTarget(geometry_msgs::Pose2D target_pose)
     }
 
     // 停止旋转
-    vel_msg.angular.z = 0.0;
-    cmd_vel_pub.publish(vel_msg);
+
+    SetRobotSpeed(STOP, 0, 0);
     ROS_INFO("target direction achieve");
 }
 
@@ -237,8 +255,7 @@ void turnToTarget(geometry_msgs::Pose2D target_pose)
 void moveToTarget(geometry_msgs::Pose2D target_pose)
 {
     ROS_INFO("move to target !");
-    ros::Rate rate(10); // 设置循环频率为每秒10次
-    geometry_msgs::Twist vel_msg;
+    ros::Rate rate(20); // 设置循环频率为每秒10次
     int print_counter = 1;
     double angle_diff = 0.0;
     double target_yaw = 0.0;
@@ -249,25 +266,23 @@ void moveToTarget(geometry_msgs::Pose2D target_pose)
 
     // 如果机器人在目标点与充电点之前，先前进至目标点,判断目标点在机器人坐标系下y轴是否>7cm
 
-    while (ros::ok() && (getDistance(jieware_pose, target_pose, false) > 0.2 || fabs(robot_pose_in_target_coordinate.y) > 0.07))
+    while (ros::ok() && (robot_pose_in_target_coordinate.x > 0 || fabs(robot_pose_in_target_coordinate.y) > 0.07))
     {
         double distance = getDistance(jieware_pose, target_pose);
         robot_pose_in_target_coordinate = WCoor2RCoor(target_pose, jieware_pose);
         // 检测目标的角度是否变化
         if (print_counter % 5 == 0)
         {
-            target_yaw = atan2(jieware_pose.y - target_pose.y, jieware_pose.x - target_pose.x);
+            target_yaw = atan2(target_pose.y - jieware_pose.y, target_pose.x - jieware_pose.x);
             angle_diff = normalizeAngle(target_yaw - jieware_pose.theta);
             ROS_INFO("move angle_diff: %.2f", angle_diff);
         }
         angle_vel = restrictAngleVel(angle_diff);
-        vel_msg.linear.x = -0.1;
-        vel_msg.angular.z = angle_vel;
-        cmd_vel_pub.publish(vel_msg);
+
+        SetRobotSpeed(FORWARD, 0.1, angle_vel);
 
         ROS_INFO("move robot pose: x=%.2f, y=%.2f", jieware_pose.x, jieware_pose.y);
-        ROS_INFO("move target pose: x=%.2f, y=%.2f, distance: %.2f y distance :%.2f", target_pose.x, target_pose.y, distance, robot_pose_in_target_coordinate.y);
-        ROS_INFO("move now line speed: %.2f angle speed: %.2f  ", vel_msg.linear.x, angle_vel); // 打印当前移动速度
+        ROS_INFO("move target pose: x=%.2f, y=%.2f, distance: %.2f y_gap :%.2f", target_pose.x, target_pose.y, distance, robot_pose_in_target_coordinate.y);
         print_counter++;
 
         // 开过头的情况(一定周期检测距离是否在逐渐增大)
@@ -288,8 +303,8 @@ void moveToTarget(geometry_msgs::Pose2D target_pose)
     }
 
     // 停止机器人
-    vel_msg.linear.x = 0.0;
-    cmd_vel_pub.publish(vel_msg);
+
+    SetRobotSpeed(STOP, 0, 0);
     ROS_INFO("arrive at target pose");
 }
 
@@ -297,8 +312,7 @@ void moveToTarget(geometry_msgs::Pose2D target_pose)
 void moveForWardRecharge(geometry_msgs::Pose2D target_pose, geometry_msgs::Pose2D charging_station_pose)
 {
     ROS_INFO("forward move to target");
-    ros::Rate rate(10); // 设置循环频率为每秒10次
-    geometry_msgs::Twist vel_msg;
+    ros::Rate rate(20); // 设置循环频率为每秒10次
     int print_counter = 0;
     double angle_vel = 0.0;
 
@@ -310,12 +324,11 @@ void moveForWardRecharge(geometry_msgs::Pose2D target_pose, geometry_msgs::Pose2
     {
         angle_diff = normalizeAngle(target_yaw - jieware_pose.theta);
         angle_vel = restrictAngleVel(angle_diff * 2);
-        vel_msg.angular.z = angle_vel;
-        cmd_vel_pub.publish(vel_msg);
+        SetRobotSpeed(FORWARD, 0.1, angle_vel);
 
         ROS_INFO("forward rotate robot pose: x=%.2f, y=%.2f, yaw=%.2f", jieware_pose.x, jieware_pose.y, jieware_pose.theta);
         ROS_INFO("forward rotate target pose: x=%.2f, y=%.2f ", target_pose.x, target_pose.y);
-        ROS_INFO("forward rotate gap yaw: %.2f, angle speed: %.2f angle_diff %.2f ", target_yaw, angle_vel, angle_diff);
+        ROS_INFO("forward rotate gap yaw: %.2f angle_diff %.2f ", target_yaw, angle_diff);
         print_counter++;
 
         ros::spinOnce();
@@ -334,13 +347,11 @@ void moveForWardRecharge(geometry_msgs::Pose2D target_pose, geometry_msgs::Pose2
     {
         double linear_speed = 0.1;
         pose_in_target_coordinate = WCoor2RCoor(target_pose, jieware_pose);
-        vel_msg.linear.x = linear_speed;
-        vel_msg.angular.z = 0.0;
-        cmd_vel_pub.publish(vel_msg);
+        SetRobotSpeed(FORWARD, linear_speed, 0);
 
         ROS_INFO("move forward robot pose: x=%.2f, y=%.2f theta=%.2f ", jieware_pose.x, jieware_pose.y, jieware_pose.theta);
         ROS_INFO("move forward target: x=%.2f, y=%.2f", target_pose.x, target_pose.y);
-        ROS_INFO("move forward line speed: %.2f pose_in_target_coordinate.x %.2f", linear_speed, pose_in_target_coordinate.x); // 打印当前移动速度和相对位姿
+        ROS_INFO("move forward  pose_in_target_coordinate.x %.2f", pose_in_target_coordinate.x); // 打印当前移动速度和相对位姿
 
         ros::spinOnce();
         rate.sleep();
@@ -355,8 +366,7 @@ bool alignWithChargingStation(geometry_msgs::Pose2D target_pose, geometry_msgs::
 
     double angle_diff = normalizeAngle(charging_station_pose.theta - jieware_pose.theta);
 
-    ros::Rate rate(10); // 设置循环频率为每秒10次
-    geometry_msgs::Twist vel_msg;
+    ros::Rate rate(20); // 设置循环频率为每秒10次
 
     double angular_speed = 0.0;
     // 先旋转对齐
@@ -366,12 +376,11 @@ bool alignWithChargingStation(geometry_msgs::Pose2D target_pose, geometry_msgs::
         angular_speed = angle_diff * 1.5;
         angular_speed = restrictAngleVel(angular_speed);
         // 设置旋转速度
-        vel_msg.angular.z = angular_speed;
-        cmd_vel_pub.publish(vel_msg);
 
+        SetRobotSpeed(ALIGNROTATE, 0, angular_speed);
         ROS_INFO("align rotate robot pose: x=%.2f, y=%.2f, yaw=%.2f", jieware_pose.x, jieware_pose.y, jieware_pose.theta);
-        ROS_INFO("align rotate charge pose: x=%.2f, y=%.2f, yaw=%.2f , angle speed: %.2f angle_diff %.2f ",
-                 charging_station_pose.x, charging_station_pose.y, charging_station_pose.theta, angular_speed, angle_diff);
+        ROS_INFO("align rotate charge pose: x=%.2f, y=%.2f, yaw=%.2f , angle_diff %.2f ",
+                 charging_station_pose.x, charging_station_pose.y, charging_station_pose.theta, angle_diff);
 
         ros::spinOnce();
         rate.sleep();
@@ -381,8 +390,7 @@ bool alignWithChargingStation(geometry_msgs::Pose2D target_pose, geometry_msgs::
     }
 
     // 停止旋转
-    vel_msg.angular.z = 0.0;
-    cmd_vel_pub.publish(vel_msg);
+    SetRobotSpeed(STOP, 0, 0);
     ROS_INFO("charge align ok");
     ROS_INFO("prepare to align back ...");
     geometry_msgs::Pose2D pose_in_charge_coordination;
@@ -399,8 +407,15 @@ bool alignWithChargingStation(geometry_msgs::Pose2D target_pose, geometry_msgs::
     int print_counter = 0;
     double angle_vel = 0.0;
 
-    while (ros::ok() && pose_in_charge_coordination.x < 0)
+    // 开始后退对接
+    int back_time_duration = 0;
+    std::chrono::steady_clock::time_point start_time = std::chrono::steady_clock::now();
+    std::chrono::steady_clock::time_point now_time = std::chrono::steady_clock::now();
+
+    while (ros::ok() && pose_in_charge_coordination.x < -0.25 && back_time_duration < 8)
     {
+        now_time = std::chrono::steady_clock::now();
+        back_time_duration = std::chrono::duration_cast<std::chrono::seconds>(now_time - start_time).count();
         charge_distance = getDistance(jieware_pose, charging_station_pose, false);
         pose_in_charge_coordination = WCoor2RCoor(charging_station_pose, jieware_pose);
         ROS_INFO("align back charge in coordinate robot pose x=%.2f, y=%.2f ", pose_in_charge_coordination.x, pose_in_charge_coordination.y);
@@ -415,48 +430,28 @@ bool alignWithChargingStation(geometry_msgs::Pose2D target_pose, geometry_msgs::
         }
         print_counter++;
         angle_vel = restrictAngleVel(angle_diff);
-        vel_msg.linear.x = linear_speed;
-        vel_msg.angular.z = angle_vel;
 
-        cmd_vel_pub.publish(vel_msg);
-
+        SetRobotSpeed(ALIGNBACK, linear_speed, angle_vel);
         ROS_INFO("align back now pose: x=%.2f, y=%.2f theta=%.2f ", jieware_pose.x, jieware_pose.y, jieware_pose.theta);
         ROS_INFO("align back target pose: x=%.2f, y=%.2f ", charging_station_pose.x, charging_station_pose.y);
-        ROS_INFO("align back line speed: %.2f angle speed: %.2f", linear_speed, angle_vel); // 打印当前移动速度
-
-        ros::spinOnce();
-        rate.sleep();
 
         // 在移动过程中持续对齐充电座
         // tf::Quaternion q(current_pose.orientation.x, current_pose.orientation.y, current_pose.orientation.z, current_pose.orientation.w);
         // tf::Matrix3x3(q).getRPY(roll, pitch, yaw);
         double angle_diff = normalizeAngle(charging_station_pose.theta - jieware_pose.theta);
-        // // 边旋转边对齐，迭代
-        // if (fabs(angle_diff) > 0.1)
-        // {
-        //     ROS_INFO("移动过程中重新对齐充电站");
-        //     alignWithChargingStation(target_pose, charging_station_pose);
-        // }
-        // 机器人充上电,用临时位置判断，停止机器人
-        // if (charge_distance < 0.07)
-        // {
-        //     vel_msg.linear.x = 0.0;
-        //     cmd_vel_pub.publish(vel_msg);
-        //     ROS_INFO("充电站已到达");
-        //     align_charge_success = true;
-        //     break;
-        // }
-
+        ROS_INFO("charge_info check  %d ", static_cast<int>(charge_info.battery_status));
         // 机器人充上电，停止机器人
         if (charge_info.battery_status)
         {
-            vel_msg.linear.x = 0.0;
-            cmd_vel_pub.publish(vel_msg);
+            SetRobotSpeed(STOP, 0, 0);
             ROS_INFO("arrive at charge target");
             align_charge_success = true;
             break;
         }
+        ros::spinOnce();
+        rate.sleep();
     }
+    ROS_INFO("align back time duration = %d ", back_time_duration);
     return align_charge_success;
 }
 
@@ -470,6 +465,7 @@ bool reCharge(geometry_msgs::Pose2D target_pose, geometry_msgs::Pose2D charging_
     // Step 2: 移动到导航目标位置
     moveToTarget(target_pose);
 
+    ROS_INFO("bbbbbbbbbbbbbbbbbbbbb");
     // Step 3: 转向充电座朝向并对齐充电桩
     reCharge_success = alignWithChargingStation(target_pose, charging_station_pose);
 
@@ -481,7 +477,7 @@ bool goToChargingStationCallback(charging_station::GoToChargingStation::Request 
                                  charging_station::GoToChargingStation::Response &res)
 {
     ROS_INFO("achieve server request ,back charge start !");
-    ros::Rate rate(10); // 设置循环频率为每秒10次
+    ros::Rate rate(20); // 设置循环频率为每秒10次
 
     bool charge_success = false;
     bool detect = false;
@@ -513,26 +509,21 @@ bool goToChargingStationCallback(charging_station::GoToChargingStation::Request 
              target_pose2d.y,
              target_pose2d.theta);
     // 二维码与充电座朝向偏差小于5度
-    if (fabs(qr_pose_in_robot.pitch) < 5)
+    if (fabs(qr_pose_in_robot.pitch * 180 / M_PI) < 7)
     {
         // Step 3: 转向充电座朝向并对齐充电桩
+        ROS_INFO("aaaaaaaaaaaaaaaaaaa");
         charge_success = alignWithChargingStation(target_pose2d, charge_pose2d);
     }
 
     // 没有对接成功，且对接小于3次
     while (ros::ok() && !charge_success && charge_count < 3)
     {
-
         charge_success = reCharge(target_pose2d, charge_pose2d);
         if (charge_success)
         {
             res.success = true;
             break;
-        }
-        else
-        {
-            // 如果机器人退到了充电座后面
-            moveForWardRecharge(target_pose2d, charge_pose2d);
         }
         charge_count++;
         ros::spinOnce();
@@ -550,8 +541,11 @@ int main(int argc, char **argv)
     setlocale(LC_ALL, "");
     ros::init(argc, argv, "charging_station_service_server");
     ros::NodeHandle nh;
+    // 获取充电桩的位姿。
+    // charging_station::ImageRectDetector detector_test;
+    // bool detect = detector_test.QRcodeDectectPnp(qr_pose_in_robot);
 
-    // ros::Subscriber odom_sub = nh.subscribe("/odom", 10, odomCallback);
+    ros::Subscriber odom_sub = nh.subscribe("/odom", 10, odomCallback);
     ros::Subscriber pose_sub = nh.subscribe("/pose_data", 10, poseCallback);
     ros::Subscriber charge_sub = nh.subscribe("/charge", 10, chargeCallback);
     cmd_vel_pub = nh.advertise<geometry_msgs::Twist>("/cmd_vel", 10);
