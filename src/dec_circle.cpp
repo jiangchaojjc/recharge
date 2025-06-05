@@ -412,7 +412,7 @@ namespace charging_station
         return pose;
     }
 
-    bool ImageRectDetector::QRcodeDectectPnp(QRcodePoseTemp &qr_pose)
+    bool ImageRectDetector::QRcodeDectectPnp(QRcodePoseTemp &qr_pose_incamera, QRcodePoseTemp &camera_pose_inqrcode)
     {
         // 2. 检测二维码（假设已经检测到 4 个角点）
         cv::Mat image = cv::imread("/data/ld_ros/Qrcode.png");
@@ -423,11 +423,18 @@ namespace charging_station
         }
 
         // 6. 定义相机内参（需提前标定）
+        // cv::Mat camera_matrix = (cv::Mat_<double>(3, 3) << 941.0, 0, 1403, // fx, 0, cx
+        // 0, 941.0, 855,                            // 0, fy, cy
+        // 0, 0, 1);
+
         cv::Mat camera_matrix = (cv::Mat_<double>(3, 3) << 631.0, 0, 1440, // fx, 0, cx
                                  0, 631.0, 808,                            // 0, fy, cy
                                  0, 0, 1);
-        cv::Mat dist_coeffs = cv::Mat::zeros(5, 1, CV_64F); // 假设无畸变
-        cv::Mat rvec, tvec;                                 // 旋转向量和平移向量
+        // 畸变
+        // cv::Mat dist_coeffs = (cv::Mat_<double>(5, 1) << -0.342, 0.1567, 0.0009, -0.00008, -0.04);
+        cv::Mat dist_coeffs = (cv::Mat_<double>(5, 1) << 0.0, 0.0, 0.0, 0.0, 0.0);
+
+        cv::Mat rvec, tvec; // 旋转向量和平移向量
         bool success = false;
         // aruco二维码识别
         if (arcuo)
@@ -517,42 +524,67 @@ namespace charging_station
             return false;
         }
 
-        // 使用示例：
+        // 使用示例：得到机器人坐标系下的二维码位姿 ，机器人坐标系 ---------->x,轴朝向外
+        //                                                    |
+        //                                                    |
+        //                                                    |
+        //                                                    |y
         cv::Mat R;
         cv::Rodrigues(rvec, R);
+
+        // 可选：转换为欧拉角
+        // cv::Mat M;
+        // cv::Mat N;
+        // cv::Vec3d euler_angles_camera = cv::RQDecomp3x3(R, M, N);
+        // std::cout << "二维码相对于机器人欧拉角 (roll, pitch, yaw): "
+        //           << euler_angles_camera(0) << " " << euler_angles_camera(1)
+        //           << " " << euler_angles_camera(2) << " " << std::endl;
         double yaw, pitch, roll;
         pitch = asin(-R.at<double>(2, 0));
         roll = atan2(R.at<double>(2, 1), R.at<double>(2, 2));
         yaw = atan2(R.at<double>(1, 0), R.at<double>(0, 0));
-        std::cout << "二维码相对于机器人的角度: " << std::endl;
-        std::cout << "Yaw (Z): " << yaw * 180 / CV_PI << "°" << std::endl;
-        std::cout << "Pitch (Y): " << pitch * 180 / CV_PI << "°" << std::endl;
-        std::cout << "Roll (X): " << roll * 180 / CV_PI << "°" << std::endl;
+        // std::cout << "二维码相对于机器人的角度: " << std::endl;
+        // std::cout << "Yaw (Z): " << yaw * 180 / CV_PI << "°" << std::endl;
+        // std::cout << "Pitch (Y): " << pitch * 180 / CV_PI << "°" << std::endl;
+        // std::cout << "Roll (X): " << roll * 180 / CV_PI << "°" << std::endl;
 
         // 方法1：使用 at<double> 访问
         double tx = tvec.at<double>(0);
         double ty = tvec.at<double>(1);
         double tz = tvec.at<double>(2);
-        std::cout << "二维码相对于机器人的位置 (x, y, z): " << tx << "  " << ty << "  " << tz << std::endl;
+        std::cout << "二维码相对于鱼眼相机的位置 (x, y, z): " << tx << "  " << ty << "  " << tz << std::endl;
 
-        qr_pose.x = tx;
-        qr_pose.y = ty;
-        qr_pose.z = tz;
-        qr_pose.roll = roll;
-        qr_pose.pitch = pitch;
-        qr_pose.yaw = yaw;
+        qr_pose_incamera.x = tx;
+        qr_pose_incamera.y = ty;
+        qr_pose_incamera.z = tz;
+        qr_pose_incamera.roll = roll;
+        qr_pose_incamera.pitch = pitch;
+        qr_pose_incamera.yaw = yaw;
+        std::cout << "二维码相对于鱼眼相机的角度 (roll, pitch, yaw): "
+                  << qr_pose_incamera.roll * 180 / CV_PI << "  " << qr_pose_incamera.pitch * 180 / CV_PI
+                  << "  " << qr_pose_incamera.yaw * 180 / CV_PI << std::endl;
 
         // 9. 计算机器人相对于二维码的位姿
         cv::Mat R_robot_to_tag = R.t();                  // 旋转矩阵的逆 = 转置
         cv::Mat t_robot_to_tag = -R_robot_to_tag * tvec; // 平移向量
-        // 10. 打印结果
-        std::cout << "机器人相对于二维码的位置 (x, y, z): " << t_robot_to_tag.t() << std::endl;
 
         // 可选：转换为欧拉角
-        cv::Mat K;
-        cv::Mat Q;
-        cv::Vec3d euler_angles = cv::RQDecomp3x3(R_robot_to_tag, K, Q);
-        std::cout << "机器人相对于二维码的欧拉角 (roll, pitch, yaw): " << euler_angles << std::endl;
+        // cv::Mat K;
+        // cv::Mat Q;
+        // cv::Vec3d euler_angles = cv::RQDecomp3x3(R_robot_to_tag, K, Q);
+        pitch = asin(-R_robot_to_tag.at<double>(2, 0));
+        roll = atan2(R_robot_to_tag.at<double>(2, 1), R_robot_to_tag.at<double>(2, 2));
+        yaw = atan2(R_robot_to_tag.at<double>(1, 0), R_robot_to_tag.at<double>(0, 0));
+        camera_pose_inqrcode.x = t_robot_to_tag.at<double>(0);
+        camera_pose_inqrcode.y = t_robot_to_tag.at<double>(1);
+        camera_pose_inqrcode.z = t_robot_to_tag.at<double>(2);
+        camera_pose_inqrcode.roll = roll;
+        camera_pose_inqrcode.pitch = pitch;
+        camera_pose_inqrcode.yaw = yaw;
+        std::cout << "鱼眼相机相对于二维码 (x, y, z) "
+                  << camera_pose_inqrcode.x << " " << camera_pose_inqrcode.y << " "
+                  << camera_pose_inqrcode.z << " (roll, pitch, yaw): " << camera_pose_inqrcode.roll * 180 / CV_PI << " "
+                  << camera_pose_inqrcode.pitch * 180 / CV_PI << " " << camera_pose_inqrcode.yaw * 180 / CV_PI << " " << std::endl;
         return true;
     }
 

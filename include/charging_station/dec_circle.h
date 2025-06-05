@@ -50,7 +50,7 @@ namespace charging_station
         geometry_msgs::Pose getChargingStationPoseStatic();
         geometry_msgs::Pose pose2DTo3DManual(const geometry_msgs::Pose2D &pose2d);
         geometry_msgs::Pose2D pose3DTo2D(const geometry_msgs::Pose &pose3d);
-        bool QRcodeDectectPnp(QRcodePoseTemp &qr_pose);
+        bool QRcodeDectectPnp(QRcodePoseTemp &qr_pose_incamera, QRcodePoseTemp &camera_pose_inqrcode);
 
     private:
         void imageCallback(const sensor_msgs::ImageConstPtr &msg);

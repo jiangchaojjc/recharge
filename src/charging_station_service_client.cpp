@@ -54,11 +54,11 @@ geometry_msgs::Pose pose2DTo3DManual(const geometry_msgs::Pose2D &pose2d)
 move_base_msgs::MoveBaseGoal getNaviRechargeGoal()
 {
     geometry_msgs::Pose2D pose_2d;
-    pose_2d.x = 0.82;
-    pose_2d.y = -0.89;
-    pose_2d.theta = -0.209;
+    pose_2d.x = 0.23;
+    pose_2d.y = 0.0;
+    pose_2d.theta = -3.12;
     geometry_msgs::Pose pose3d = pose2DTo3DManual(pose_2d);
-
+    std::cout << "导航到目标点 : " << pose_2d.x << "  " << pose_2d.y << "  " << pose3d.position.x << "  " << pose3d.position.y << std::endl;
     move_base_msgs::MoveBaseGoal goal;
 
     // 设置目标坐标系（必须与地图一致！）
@@ -101,8 +101,9 @@ int main(int argc, char **argv)
     ros::Duration(1.0).sleep();
     // 获取充电桩的位姿
     QRcodePoseTemp qr_pose_in_robot_test;
+    QRcodePoseTemp camera_in_qr_code;
     charging_station::ImageRectDetector detector_test;
-    bool detect = detector_test.QRcodeDectectPnp(qr_pose_in_robot_test);
+    bool detect = detector_test.QRcodeDectectPnp(qr_pose_in_robot_test, camera_in_qr_code);
 
     // 调用定点回充服务
     ros::ServiceClient client = nh.serviceClient<charging_station::GoToChargingStation>("go_to_charging_station");
